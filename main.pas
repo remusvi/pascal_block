@@ -14,17 +14,17 @@ type
   TBlockType = (btAir = 0, btStone = 1, btDirt = 2, btGrass = 3);
 
   TChunk = record
-    Blocks: array[0..CHUNK_SIZE-1, 0..CHUNK_SIZE * 16, 0..CHUNK_SIZE-1] of TBlockType;
+    Blocks: array[0..CHUNK_SIZE-1, 0..CHUNK_SIZE-1, 0..CHUNK_SIZE-1] of TBlockType;
     Position: TVec3;
   end;
+
+  TWorld = array of TChunk;
 
 var
   Camera: TCamera3D;
   MyChunk: TChunk;
-  ScreenCenter: TVec2;
-  cx, cy, cz: Integer;
-  BlockPos: TVec3;
-  BlockColor: TColor;
+  World: TWorld;
+  i: Integer;
 
 procedure InitChunk(var Chunk: TChunk; WorldX, WorldZ: Single);
 var
@@ -46,14 +46,58 @@ begin
       end;
 end;
 
+procedure RenderWorld(const W: TWorld);
+var
+  c, cx, cy, cz: Integer;
+  IsExposed: Boolean;
+  BlockPos: TVec3;
+  BlockColor: TColor;
 begin
-  Writeln('DEBUG: Starting application...');
+  for c := Low(W) to High(W) do
+  begin
+    for cx := 0 to CHUNK_SIZE - 1 do
+      for cy := 0 to CHUNK_SIZE - 1 do
+        for cz := 0 to CHUNK_SIZE - 1 do
+        begin
+          if W[c].Blocks[cx, cy, cz] <> btAir then
+          begin
+            IsExposed :=
+              (cx = 0) or (W[c].Blocks[cx - 1, cy, cz] = btAir) or
+              (cx = CHUNK_SIZE - 1) or (W[c].Blocks[cx + 1, cy, cz] = btAir) or
+              (cy = 0) or (W[c].Blocks[cx, cy - 1, cz] = btAir) or
+              (cy = CHUNK_SIZE - 1) or (W[c].Blocks[cx, cy + 1, cz] = btAir) or
+              (cz = 0) or (W[c].Blocks[cx, cy, cz - 1] = btAir) or
+              (cz = CHUNK_SIZE - 1) or (W[c].Blocks[cx, cy, cz + 1] = btAir);
 
-  Writeln('DEBUG: Attempting to call InitWindow...');
+            if IsExposed then
+            begin
+              BlockPos := Vec(
+                W[c].Position.x + cx,
+                W[c].Position.y + cy,
+                W[c].Position.z + cz
+              );
+
+              case W[c].Blocks[cx, cy, cz] of
+                btStone: BlockColor := GRAY;
+                btDirt:  BlockColor := DARKBROWN;
+                btGrass: BlockColor := GREEN;
+              else
+                BlockColor := WHITE;
+              end;
+
+              DrawCube(BlockPos, 1.0, 1.0, 1.0, BlockColor);
+              DrawCubeWires(BlockPos, 1.002, 1.002, 1.002, DARKGRAY);
+            end;
+          end;
+        end;
+  end;
+end;
+
+begin
+  Writeln('DEBUG: Starting Voxel Application...');
+
   InitWindow(ScreenWidth, ScreenHeight, 'Voxel Engine - First Person');
-  Writeln('DEBUG: InitWindow succeeded!');
-
-  SetTargetFPS(200);
+  SetTargetFPS(60);
 
   Camera.position := Vec(8.0, 10.0, 20.0);
   Camera.target   := Vec(8.0, 10.0, 19.0);
@@ -64,7 +108,12 @@ begin
   DisableCursor();
 
   { Initialize chunk world data }
-  InitChunk(MyChunk, 0.0, 0.0);
+  SetLength(World, 40);
+  for i := 0 to 2 do
+  begin
+    InitChunk(MyChunk, i * 15, i * 15);
+    World[i] := MyChunk;
+  end;
 
   while not WindowShouldClose() do
   begin
@@ -74,32 +123,7 @@ begin
       ClearBackground(SKYBLUE);
 
       BeginMode3D(Camera);
-        { Render Chunk Blocks }
-        for cx := 0 to CHUNK_SIZE - 1 do
-          for cy := 0 to CHUNK_SIZE - 1 do
-            for cz := 0 to CHUNK_SIZE - 1 do
-            begin
-              if MyChunk.Blocks[cx, cy, cz] <> btAir then
-              begin
-                BlockPos := Vec(
-                  MyChunk.Position.x + cx + 0.5,
-                  MyChunk.Position.y + cy + 0.5,
-                  MyChunk.Position.z + cz + 0.5
-                );
-
-                case MyChunk.Blocks[cx, cy, cz] of
-                  btStone: BlockColor := GRAY;
-                  btDirt:  BlockColor := DARKBROWN;
-                  btGrass: BlockColor := GREEN;
-                else
-                  BlockColor := WHITE;
-                end;
-
-                DrawCube(BlockPos, 1.0, 1.0, 1.0, BlockColor);
-                DrawCubeWires(BlockPos, 1.0, 1.0, 1.0, DARKGRAY);
-              end;
-            end;
-
+        RenderWorld(World);
         DrawGrid(32, 1.0);
       EndMode3D();
 
